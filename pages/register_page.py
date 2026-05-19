@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -191,6 +192,10 @@ class RegisterPage(BasePage):
 
     def enter_otp(self, otp: str) -> None:
         self.type_text(self.otp_input, otp)
+
+    def press_otp_backspace(self) -> None:
+        self.driver.find_element(*self.otp_input).send_keys(Keys.BACKSPACE)
+        self.pause()
 
     def get_otp_value(self) -> str:
         return self.driver.find_element(*self.otp_input).get_attribute("value")

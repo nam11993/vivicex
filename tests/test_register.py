@@ -53,10 +53,10 @@ REFERRAL_SKIP_REGISTER_CASES = {
 
 EMAIL_VERIFY_REGISTER_CASES = {
     "REG_037",
-    "REG_038",
     "REG_039",
     "REG_040",
     "REG_044",
+    "REG_047",
     "REG_048",
     "REG_049",
     "REG_050",
@@ -311,13 +311,6 @@ def test_register_email_verification(register_page: RegisterPage, case: dict):
         assert register_page.is_email_verification_ui_displayed()
         assert not register_page.is_email_verify_next_enabled()
 
-    elif case_id == "REG_038":
-        register_page.enter_otp(test_data)
-        assert register_page.get_otp_value() == test_data
-        if register_page.is_email_verify_next_enabled():
-            pytest.xfail("Expected OTP to accept only digits, but letters are accepted and Next is enabled.")
-        assert not register_page.is_email_verify_next_enabled()
-
     elif case_id == "REG_039":
         register_page.enter_otp(test_data)
         assert register_page.get_otp_value() == test_data
@@ -330,6 +323,14 @@ def test_register_email_verification(register_page: RegisterPage, case: dict):
 
     elif case_id == "REG_044":
         assert not register_page.is_resend_enabled()
+
+    elif case_id == "REG_047":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data
+        assert register_page.is_email_verify_next_enabled()
+        register_page.press_otp_backspace()
+        assert register_page.get_otp_value() == test_data[:-1]
+        assert not register_page.is_email_verify_next_enabled()
 
     elif case_id == "REG_048":
         register_page.enter_otp(test_data)
