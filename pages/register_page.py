@@ -46,7 +46,16 @@ class RegisterPage(BasePage):
         "//input[@id='register-referral-input']/ancestor::form//button"
         "[normalize-space()='Continue' or normalize-space()='Ti\u1ebfp t\u1ee5c']",
     )
-    otp_inputs = (By.CSS_SELECTOR, "input[inputmode='numeric'], input[autocomplete='one-time-code'], input[name*='code']")
+    otp_input = (By.CSS_SELECTOR, "input[maxlength='6']")
+    resend_button = (
+        By.XPATH,
+        "//button[starts-with(normalize-space(), 'Resend') or starts-with(normalize-space(), 'G\u1eedi l\u1ea1i')]",
+    )
+    email_verify_next_button = (
+        By.XPATH,
+        "//button[normalize-space()='Next' or normalize-space()='Ti\u1ebfp theo']",
+    )
+    email_verify_back_button = (By.XPATH, "(//input[@maxlength='6']/ancestor::form/preceding::button)[last()]")
 
     def __init__(
         self,
@@ -108,6 +117,13 @@ class RegisterPage(BasePage):
         required_elements = [self.back_button, self.password_title, self.password_input, self.password_toggle_button]
         return all(self.driver.find_element(*locator).is_displayed() for locator in required_elements)
 
+    def is_password_step_displayed(self) -> bool:
+        try:
+            WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.password_input))
+            return True
+        except TimeoutException:
+            return False
+
     def enter_password(self, password: str) -> None:
         self.type_text(self.password_input, password)
 
@@ -153,9 +169,8 @@ class RegisterPage(BasePage):
 
     def wait_until_email_verification_loaded(self) -> None:
         WebDriverWait(self.driver, self.timeout).until(
-            lambda driver: len(driver.find_elements(*self.otp_inputs)) >= 1
-            or "verify" in driver.current_url.lower()
-            or "code" in driver.page_source.lower()
+            lambda driver: "/verify" in driver.current_url.lower()
+            and len(driver.find_elements(*self.otp_input)) >= 1
         )
 
     def is_email_verification_displayed(self) -> bool:
@@ -164,6 +179,31 @@ class RegisterPage(BasePage):
             return True
         except TimeoutException:
             return False
+
+    def is_email_verification_ui_displayed(self) -> bool:
+        required_elements = [
+            self.email_verify_back_button,
+            self.otp_input,
+            self.resend_button,
+            self.email_verify_next_button,
+        ]
+        return all(self.driver.find_element(*locator).is_displayed() for locator in required_elements)
+
+    def enter_otp(self, otp: str) -> None:
+        self.type_text(self.otp_input, otp)
+
+    def get_otp_value(self) -> str:
+        return self.driver.find_element(*self.otp_input).get_attribute("value")
+
+    def is_email_verify_next_enabled(self) -> bool:
+        return self.driver.find_element(*self.email_verify_next_button).is_enabled()
+
+    def is_resend_enabled(self) -> bool:
+        return self.driver.find_element(*self.resend_button).is_enabled()
+
+    def click_email_verify_back(self) -> None:
+        self.click(self.email_verify_back_button)
+        self._confirm_back_if_needed()
 
     def click_password_back(self) -> None:
         self.click(self.back_button)

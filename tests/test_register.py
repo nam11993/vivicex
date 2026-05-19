@@ -49,7 +49,17 @@ REFERRAL_SKIP_REGISTER_CASES = {
     "REG_030",
     "REG_031",
     "REG_032",
+}
+
+EMAIL_VERIFY_REGISTER_CASES = {
     "REG_037",
+    "REG_038",
+    "REG_039",
+    "REG_040",
+    "REG_044",
+    "REG_048",
+    "REG_049",
+    "REG_050",
 }
 
 PASSWORD_RULE_BY_CASE = {
@@ -81,7 +91,7 @@ def _register_cases() -> list[dict]:
     for row in read_sheet_as_dicts(DATA_FILE, SHEET_NAME):
         case_id = _cell(row, "ID")
         auto = _cell(row, "Auto").lower()
-        if case_id in UI_REGISTER_CASES | PASSWORD_REGISTER_CASES | REFERRAL_SKIP_REGISTER_CASES and auto == "yes":
+        if case_id in UI_REGISTER_CASES | PASSWORD_REGISTER_CASES | REFERRAL_SKIP_REGISTER_CASES | EMAIL_VERIFY_REGISTER_CASES and auto == "yes":
             cases.append(row)
     return cases
 
@@ -101,6 +111,11 @@ def _open_referral_step_with_new_email(register_page: RegisterPage) -> None:
     register_page.continue_to_password(_unique_email())
     register_page.enter_password("Abcdef1@")
     register_page.click_password_next()
+
+
+def _open_email_verification_step(register_page: RegisterPage) -> None:
+    _open_referral_step_with_new_email(register_page)
+    register_page.skip_referral()
 
 
 @pytest.fixture
@@ -271,10 +286,69 @@ def test_register_referral_skip_flow(register_page: RegisterPage, settings, case
         elif case_id == "REG_032":
             assert not register_page.is_referral_continue_enabled()
 
-    elif case_id in {"REG_031", "REG_037"}:
+    elif case_id == "REG_031":
         _open_referral_step_with_new_email(register_page)
         register_page.skip_referral()
         assert register_page.is_email_verification_displayed()
+
+    else:
+        pytest.skip(f"No automation mapping has been implemented for {case_id}.")
+
+
+@pytest.mark.register
+@pytest.mark.parametrize(
+    "case",
+    _cases_by_id(EMAIL_VERIFY_REGISTER_CASES),
+    ids=lambda case: case.get("ID", "register_email_verify_case"),
+)
+def test_register_email_verification(register_page: RegisterPage, case: dict):
+    case_id = _cell(case, "ID")
+    test_data = _cell(case, "Test data")
+
+    _open_email_verification_step(register_page)
+
+    if case_id == "REG_037":
+        assert register_page.is_email_verification_ui_displayed()
+        assert not register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_038":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data
+        if register_page.is_email_verify_next_enabled():
+            pytest.xfail("Expected OTP to accept only digits, but letters are accepted and Next is enabled.")
+        assert not register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_039":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data
+        assert not register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_040":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data
+        assert register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_044":
+        assert not register_page.is_resend_enabled()
+
+    elif case_id == "REG_048":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data
+        assert register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_049":
+        register_page.enter_otp(test_data)
+        assert register_page.get_otp_value() == test_data[:6]
+        assert register_page.is_email_verify_next_enabled()
+
+    elif case_id == "REG_050":
+        register_page.click_email_verify_back()
+        if register_page.is_referral_step_displayed():
+            assert True
+        elif register_page.is_password_step_displayed():
+            pytest.xfail("Expected back to referral step, but platform navigates back to password step.")
+        else:
+            pytest.fail("Back from email verification did not return to referral or password step.")
 
     else:
         pytest.skip(f"No automation mapping has been implemented for {case_id}.")
