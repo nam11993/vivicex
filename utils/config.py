@@ -34,6 +34,8 @@ class Settings:
     base_url: str = os.getenv("BASE_URL", "https://example.com")
     auth_organization: str = os.getenv("AUTH_ORGANIZATION", "341557029820694806")
     auth_request_id: str = os.getenv("AUTH_REQUEST_ID", "oidc_V2_373571812329521422")
+    auth_register_user_id: str = os.getenv("AUTH_REGISTER_USER_ID", "311988438623211354")
+    register_test_email: str = os.getenv("REGISTER_TEST_EMAIL", "hainam11993@gmail.com")
     browser: str = os.getenv("BROWSER", "chrome")
     headless: bool = _as_bool(os.getenv("HEADLESS"), False)
     implicit_wait: int = _as_int(os.getenv("IMPLICIT_WAIT"), 0)

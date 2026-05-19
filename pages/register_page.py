@@ -20,6 +20,20 @@ class RegisterPage(BasePage):
     privacy_link = (By.CSS_SELECTOR, "a[href*='privacy-policy']")
     language_button = (By.CSS_SELECTOR, "button[aria-haspopup='listbox']")
     dark_mode_button = (By.CSS_SELECTOR, "button[aria-label='Switch to dark mode']")
+    password_title = (By.CSS_SELECTOR, "h1")
+    password_input = (By.CSS_SELECTOR, "[data-testid='password-text-input']")
+    password_toggle_button = (By.CSS_SELECTOR, "[data-testid='password-text-input'] + div button")
+    back_button = (By.XPATH, "(//input[@data-testid='password-text-input']/ancestor::form/preceding::button)[last()]")
+    referral_input = (By.ID, "register-referral-input")
+    referral_title = (By.XPATH, "//h1[contains(normalize-space(), 'Mã giới thiệu')]")
+    confirm_back_button = (By.XPATH, "//button[normalize-space()='Yes' or normalize-space()='Có']")
+    password_rule_locators = {
+        "length": (By.CSS_SELECTOR, "[data-testid='length-check'] svg"),
+        "uppercase": (By.CSS_SELECTOR, "[data-testid='uppercase-check'] svg"),
+        "lowercase": (By.CSS_SELECTOR, "[data-testid='lowercase-check'] svg"),
+        "number": (By.CSS_SELECTOR, "[data-testid='number-check'] svg"),
+        "symbol": (By.CSS_SELECTOR, "[data-testid='symbol-check'] svg"),
+    }
 
     def __init__(
         self,
@@ -39,12 +53,30 @@ class RegisterPage(BasePage):
         self.open_path(f"register?{query}")
         self.wait_until_loaded()
 
+    def open_password(self, email: str, user_id: str) -> None:
+        query = urlencode(
+            {
+                "email": email,
+                "userId": user_id,
+                "organization": self.organization,
+                "requestId": self.request_id,
+            }
+        )
+        self.open_path(f"register/password?{query}")
+        self.wait_until_password_loaded()
+
     def wait_until_loaded(self) -> None:
         WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.title))
         WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.email_input))
 
     def enter_email(self, email: str) -> None:
         self.type_text(self.email_input, email)
+
+    def continue_to_password(self, email: str) -> None:
+        self.enter_email(email)
+        self.accept_legal_terms()
+        self.click(self.submit_button)
+        self.wait_until_password_loaded()
 
     def accept_legal_terms(self) -> None:
         if not self.is_legal_accepted():
@@ -55,6 +87,52 @@ class RegisterPage(BasePage):
 
     def is_submit_enabled(self) -> bool:
         return self.driver.find_element(*self.submit_button).is_enabled()
+
+    def wait_until_password_loaded(self) -> None:
+        WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.password_input))
+
+    def is_password_ui_displayed(self) -> bool:
+        required_elements = [self.back_button, self.password_title, self.password_input, self.password_toggle_button]
+        return all(self.driver.find_element(*locator).is_displayed() for locator in required_elements)
+
+    def enter_password(self, password: str) -> None:
+        self.type_text(self.password_input, password)
+
+    def get_password_input_type(self) -> str:
+        return self.driver.find_element(*self.password_input).get_attribute("type")
+
+    def toggle_password_visibility(self) -> None:
+        self.click(self.password_toggle_button)
+
+    def is_password_rule_matched(self, rule: str) -> bool:
+        rule_icon = self.driver.find_element(*self.password_rule_locators[rule])
+        return rule_icon.get_attribute("aria-label") in {"Khớp", "Matches"}
+
+    def are_all_password_rules_matched(self) -> bool:
+        return all(self.is_password_rule_matched(rule) for rule in self.password_rule_locators)
+
+    def click_password_next(self) -> None:
+        self.click(self.submit_button)
+        WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.referral_input))
+
+    def is_referral_step_displayed(self) -> bool:
+        try:
+            WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.referral_input))
+            return True
+        except TimeoutException:
+            return False
+
+    def click_password_back(self) -> None:
+        self.click(self.back_button)
+        self._confirm_back_if_needed()
+        self.wait_until_loaded()
+
+    def _confirm_back_if_needed(self) -> None:
+        try:
+            WebDriverWait(self.driver, 3).until(EC.element_to_be_clickable(self.confirm_back_button)).click()
+            self.pause()
+        except TimeoutException:
+            return
 
     def is_email_valid(self) -> bool:
         email = self.driver.find_element(*self.email_input)

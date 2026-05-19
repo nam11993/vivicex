@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from pages.register_page import RegisterPage
@@ -10,7 +12,7 @@ from utils.excel_reader import read_sheet_as_dicts
 DATA_FILE = ROOT_DIR / "test_data" / "users.xlsx"
 SHEET_NAME = "login"
 
-UI_SAFE_REGISTER_CASES = {
+UI_REGISTER_CASES = {
     "REG_001",
     "REG_002",
     "REG_003",
@@ -28,12 +30,40 @@ UI_SAFE_REGISTER_CASES = {
     "REG_017",
 }
 
+PASSWORD_REGISTER_CASES = {
+    "REG_018",
+    "REG_019",
+    "REG_020",
+    "REG_021",
+    "REG_022",
+    "REG_023",
+    "REG_024",
+    "REG_025",
+    "REG_026",
+    "REG_027",
+    "REG_028",
+    "REG_029",
+}
+
+PASSWORD_RULE_BY_CASE = {
+    "REG_021": "length",
+    "REG_022": "uppercase",
+    "REG_023": "lowercase",
+    "REG_024": "number",
+    "REG_025": "symbol",
+}
+
 
 def _cell(row: dict, name: str, default: str = "") -> str:
     value = row.get(name)
     if value is None:
         return default
     return str(value).strip()
+
+
+def _unique_email() -> str:
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    return f"auto.register.{timestamp}@example.com"
 
 
 def _register_cases() -> list[dict]:
@@ -44,9 +74,13 @@ def _register_cases() -> list[dict]:
     for row in read_sheet_as_dicts(DATA_FILE, SHEET_NAME):
         case_id = _cell(row, "ID")
         auto = _cell(row, "Auto").lower()
-        if case_id in UI_SAFE_REGISTER_CASES and auto == "yes":
+        if case_id in UI_REGISTER_CASES | PASSWORD_REGISTER_CASES and auto == "yes":
             cases.append(row)
     return cases
+
+
+def _cases_by_id(case_ids: set[str]) -> list[dict]:
+    return [case for case in _register_cases() if _cell(case, "ID") in case_ids]
 
 
 @pytest.fixture
@@ -62,7 +96,7 @@ def register_page(driver, base_url, settings, slow_motion) -> RegisterPage:
 
 
 @pytest.mark.register
-@pytest.mark.parametrize("case", _register_cases(), ids=lambda case: case.get("ID", "register_case"))
+@pytest.mark.parametrize("case", _cases_by_id(UI_REGISTER_CASES), ids=lambda case: case.get("ID", "register_case"))
 def test_register_ui_validation(register_page: RegisterPage, case: dict):
     case_id = _cell(case, "ID")
     test_data = _cell(case, "Test data")
@@ -137,3 +171,63 @@ def test_register_ui_validation(register_page: RegisterPage, case: dict):
 
     else:
         pytest.skip(f"No automation mapping has been implemented for {case_id}.")
+
+
+@pytest.mark.register
+@pytest.mark.parametrize(
+    "case",
+    _cases_by_id(PASSWORD_REGISTER_CASES),
+    ids=lambda case: case.get("ID", "register_password_case"),
+)
+def test_register_password_validation(register_page: RegisterPage, settings, case: dict):
+    case_id = _cell(case, "ID")
+    test_data = _cell(case, "Test data")
+    password = "" if test_data in {"N/A", "Empty password"} else test_data
+
+    if case_id == "REG_018":
+        register_page.open()
+        register_page.continue_to_password(_unique_email())
+        assert register_page.is_password_ui_displayed()
+
+    elif case_id == "REG_028":
+        register_page.open()
+        register_page.continue_to_password(_unique_email())
+        register_page.click_password_back()
+        assert register_page.is_initial_ui_displayed()
+
+    else:
+        register_page.open_password(settings.register_test_email, settings.auth_register_user_id)
+
+        if case_id == "REG_019":
+            assert register_page.is_password_ui_displayed()
+            assert not register_page.is_submit_enabled()
+
+        elif case_id == "REG_020":
+            assert not register_page.is_submit_enabled()
+
+        elif case_id in PASSWORD_RULE_BY_CASE:
+            register_page.enter_password(password)
+            assert not register_page.is_password_rule_matched(PASSWORD_RULE_BY_CASE[case_id])
+            assert not register_page.is_submit_enabled()
+
+        elif case_id == "REG_026":
+            register_page.enter_password(password)
+            assert register_page.are_all_password_rules_matched()
+            assert register_page.is_submit_enabled()
+
+        elif case_id == "REG_027":
+            register_page.enter_password(password)
+            assert register_page.get_password_input_type() == "password"
+            register_page.toggle_password_visibility()
+            assert register_page.get_password_input_type() == "text"
+            register_page.toggle_password_visibility()
+            assert register_page.get_password_input_type() == "password"
+
+        elif case_id == "REG_029":
+            register_page.enter_password(password)
+            assert register_page.is_submit_enabled()
+            register_page.click_password_next()
+            assert register_page.is_referral_step_displayed()
+
+        else:
+            pytest.skip(f"No automation mapping has been implemented for {case_id}.")
