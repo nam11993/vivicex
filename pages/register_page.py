@@ -20,13 +20,12 @@ class RegisterPage(BasePage):
     privacy_link = (By.CSS_SELECTOR, "a[href*='privacy-policy']")
     language_button = (By.CSS_SELECTOR, "button[aria-haspopup='listbox']")
     dark_mode_button = (By.CSS_SELECTOR, "button[aria-label='Switch to dark mode']")
+
     password_title = (By.CSS_SELECTOR, "h1")
     password_input = (By.CSS_SELECTOR, "[data-testid='password-text-input']")
     password_toggle_button = (By.CSS_SELECTOR, "[data-testid='password-text-input'] + div button")
     back_button = (By.XPATH, "(//input[@data-testid='password-text-input']/ancestor::form/preceding::button)[last()]")
-    referral_input = (By.ID, "register-referral-input")
-    referral_title = (By.XPATH, "//h1[contains(normalize-space(), 'Mã giới thiệu')]")
-    confirm_back_button = (By.XPATH, "//button[normalize-space()='Yes' or normalize-space()='Có']")
+    confirm_back_button = (By.XPATH, "//button[normalize-space()='Yes' or normalize-space()='C\u00f3']")
     password_rule_locators = {
         "length": (By.CSS_SELECTOR, "[data-testid='length-check'] svg"),
         "uppercase": (By.CSS_SELECTOR, "[data-testid='uppercase-check'] svg"),
@@ -34,6 +33,20 @@ class RegisterPage(BasePage):
         "number": (By.CSS_SELECTOR, "[data-testid='number-check'] svg"),
         "symbol": (By.CSS_SELECTOR, "[data-testid='symbol-check'] svg"),
     }
+
+    referral_title = (By.CSS_SELECTOR, "h1")
+    referral_input = (By.ID, "register-referral-input")
+    referral_skip_button = (
+        By.XPATH,
+        "//input[@id='register-referral-input']/ancestor::form//button"
+        "[normalize-space()='Skip' or normalize-space()='B\u1ecf qua']",
+    )
+    referral_continue_button = (
+        By.XPATH,
+        "//input[@id='register-referral-input']/ancestor::form//button"
+        "[normalize-space()='Continue' or normalize-space()='Ti\u1ebfp t\u1ee5c']",
+    )
+    otp_inputs = (By.CSS_SELECTOR, "input[inputmode='numeric'], input[autocomplete='one-time-code'], input[name*='code']")
 
     def __init__(
         self,
@@ -106,7 +119,7 @@ class RegisterPage(BasePage):
 
     def is_password_rule_matched(self, rule: str) -> bool:
         rule_icon = self.driver.find_element(*self.password_rule_locators[rule])
-        return rule_icon.get_attribute("aria-label") in {"Khớp", "Matches"}
+        return rule_icon.get_attribute("aria-label") in {"Kh\u1edbp", "Matches"}
 
     def are_all_password_rules_matched(self) -> bool:
         return all(self.is_password_rule_matched(rule) for rule in self.password_rule_locators)
@@ -118,6 +131,36 @@ class RegisterPage(BasePage):
     def is_referral_step_displayed(self) -> bool:
         try:
             WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.referral_input))
+            return True
+        except TimeoutException:
+            return False
+
+    def is_referral_ui_displayed(self) -> bool:
+        required_elements = [
+            self.referral_title,
+            self.referral_input,
+            self.referral_skip_button,
+            self.referral_continue_button,
+        ]
+        return all(self.driver.find_element(*locator).is_displayed() for locator in required_elements)
+
+    def is_referral_continue_enabled(self) -> bool:
+        return self.driver.find_element(*self.referral_continue_button).is_enabled()
+
+    def skip_referral(self) -> None:
+        self.click(self.referral_skip_button)
+        self.wait_until_email_verification_loaded()
+
+    def wait_until_email_verification_loaded(self) -> None:
+        WebDriverWait(self.driver, self.timeout).until(
+            lambda driver: len(driver.find_elements(*self.otp_inputs)) >= 1
+            or "verify" in driver.current_url.lower()
+            or "code" in driver.page_source.lower()
+        )
+
+    def is_email_verification_displayed(self) -> bool:
+        try:
+            self.wait_until_email_verification_loaded()
             return True
         except TimeoutException:
             return False

@@ -45,6 +45,13 @@ PASSWORD_REGISTER_CASES = {
     "REG_029",
 }
 
+REFERRAL_SKIP_REGISTER_CASES = {
+    "REG_030",
+    "REG_031",
+    "REG_032",
+    "REG_037",
+}
+
 PASSWORD_RULE_BY_CASE = {
     "REG_021": "length",
     "REG_022": "uppercase",
@@ -74,13 +81,26 @@ def _register_cases() -> list[dict]:
     for row in read_sheet_as_dicts(DATA_FILE, SHEET_NAME):
         case_id = _cell(row, "ID")
         auto = _cell(row, "Auto").lower()
-        if case_id in UI_REGISTER_CASES | PASSWORD_REGISTER_CASES and auto == "yes":
+        if case_id in UI_REGISTER_CASES | PASSWORD_REGISTER_CASES | REFERRAL_SKIP_REGISTER_CASES and auto == "yes":
             cases.append(row)
     return cases
 
 
 def _cases_by_id(case_ids: set[str]) -> list[dict]:
     return [case for case in _register_cases() if _cell(case, "ID") in case_ids]
+
+
+def _open_referral_step(register_page: RegisterPage, settings) -> None:
+    register_page.open_password(settings.register_test_email, settings.auth_register_user_id)
+    register_page.enter_password("Abcdef1@")
+    register_page.click_password_next()
+
+
+def _open_referral_step_with_new_email(register_page: RegisterPage) -> None:
+    register_page.open()
+    register_page.continue_to_password(_unique_email())
+    register_page.enter_password("Abcdef1@")
+    register_page.click_password_next()
 
 
 @pytest.fixture
@@ -231,3 +251,30 @@ def test_register_password_validation(register_page: RegisterPage, settings, cas
 
         else:
             pytest.skip(f"No automation mapping has been implemented for {case_id}.")
+
+
+@pytest.mark.register
+@pytest.mark.parametrize(
+    "case",
+    _cases_by_id(REFERRAL_SKIP_REGISTER_CASES),
+    ids=lambda case: case.get("ID", "register_referral_case"),
+)
+def test_register_referral_skip_flow(register_page: RegisterPage, settings, case: dict):
+    case_id = _cell(case, "ID")
+
+    if case_id in {"REG_030", "REG_032"}:
+        _open_referral_step(register_page, settings)
+
+        if case_id == "REG_030":
+            assert register_page.is_referral_ui_displayed()
+
+        elif case_id == "REG_032":
+            assert not register_page.is_referral_continue_enabled()
+
+    elif case_id in {"REG_031", "REG_037"}:
+        _open_referral_step_with_new_email(register_page)
+        register_page.skip_referral()
+        assert register_page.is_email_verification_displayed()
+
+    else:
+        pytest.skip(f"No automation mapping has been implemented for {case_id}.")
