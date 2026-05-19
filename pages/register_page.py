@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+from urllib.parse import urlencode
+
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+from pages.base_page import BasePage
+
+
+class RegisterPage(BasePage):
+    title = (By.CSS_SELECTOR, "[data-i18n-key='register.title']")
+    email_input = (By.CSS_SELECTOR, "[data-testid='email-text-input']")
+    legal_checkbox = (By.CSS_SELECTOR, "[data-testid='legal-acceptance-checkbox']")
+    submit_button = (By.CSS_SELECTOR, "[data-testid='submit-button']")
+    login_link = (By.CSS_SELECTOR, "a[href*='/loginname']")
+    terms_link = (By.CSS_SELECTOR, "a[href*='terms-and-conditions']")
+    privacy_link = (By.CSS_SELECTOR, "a[href*='privacy-policy']")
+    language_button = (By.CSS_SELECTOR, "button[aria-haspopup='listbox']")
+    dark_mode_button = (By.CSS_SELECTOR, "button[aria-label='Switch to dark mode']")
+
+    def __init__(
+        self,
+        driver,
+        base_url: str,
+        organization: str,
+        request_id: str,
+        timeout: int = 15,
+        slow_motion: float = 0.0,
+    ) -> None:
+        super().__init__(driver, base_url, timeout, slow_motion)
+        self.organization = organization
+        self.request_id = request_id
+
+    def open(self) -> None:
+        query = urlencode({"organization": self.organization, "requestId": self.request_id})
+        self.open_path(f"register?{query}")
+        self.wait_until_loaded()
+
+    def wait_until_loaded(self) -> None:
+        WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.title))
+        WebDriverWait(self.driver, self.timeout).until(EC.visibility_of_element_located(self.email_input))
+
+    def enter_email(self, email: str) -> None:
+        self.type_text(self.email_input, email)
+
+    def accept_legal_terms(self) -> None:
+        if not self.is_legal_accepted():
+            self.click(self.legal_checkbox)
+
+    def is_legal_accepted(self) -> bool:
+        return self.driver.find_element(*self.legal_checkbox).get_attribute("aria-checked") == "true"
+
+    def is_submit_enabled(self) -> bool:
+        return self.driver.find_element(*self.submit_button).is_enabled()
+
+    def is_email_valid(self) -> bool:
+        email = self.driver.find_element(*self.email_input)
+        return bool(self.driver.execute_script("return arguments[0].checkValidity();", email))
+
+    def get_email_value(self) -> str:
+        return self.driver.find_element(*self.email_input).get_attribute("value")
+
+    def get_link_href(self, locator: tuple[str, str]) -> str:
+        return self.driver.find_element(*locator).get_attribute("href")
+
+    def is_initial_ui_displayed(self) -> bool:
+        required_elements = [self.title, self.email_input, self.legal_checkbox, self.submit_button, self.login_link]
+        return all(self.driver.find_element(*locator).is_displayed() for locator in required_elements)
+
+    def click_login_link(self, index: int = -1) -> None:
+        links = self.driver.find_elements(*self.login_link)
+        links[index].click()
+        WebDriverWait(self.driver, self.timeout).until(EC.url_contains("/loginname"))
+
+    def open_terms_link(self) -> str:
+        return self._click_external_link_and_get_url(self.terms_link)
+
+    def open_privacy_link(self) -> str:
+        return self._click_external_link_and_get_url(self.privacy_link)
+
+    def open_language_menu(self) -> bool:
+        self.click(self.language_button)
+        try:
+            WebDriverWait(self.driver, self.timeout).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[role='listbox'], [role='option']"))
+            )
+            return True
+        except TimeoutException:
+            return False
+
+    def toggle_dark_mode(self) -> bool:
+        was_dark = self._is_dark_mode()
+        self.click(self.dark_mode_button)
+        WebDriverWait(self.driver, self.timeout).until(lambda _: self._is_dark_mode() != was_dark)
+        return self._is_dark_mode() != was_dark
+
+    def _is_dark_mode(self) -> bool:
+        html_class = self.driver.find_element(By.TAG_NAME, "html").get_attribute("class") or ""
+        return "dark" in html_class.split()
+
+    def _click_external_link_and_get_url(self, locator: tuple[str, str]) -> str:
+        original_window = self.driver.current_window_handle
+        original_handles = set(self.driver.window_handles)
+        self.click(locator)
+        WebDriverWait(self.driver, self.timeout).until(lambda driver: len(driver.window_handles) > len(original_handles))
+        new_window = next(handle for handle in self.driver.window_handles if handle not in original_handles)
+        self.driver.switch_to.window(new_window)
+        WebDriverWait(self.driver, self.timeout).until(lambda driver: driver.current_url.startswith("http"))
+        current_url = self.driver.current_url
+        self.driver.close()
+        self.driver.switch_to.window(original_window)
+        return current_url
